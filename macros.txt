@@ -1,0 +1,82 @@
+Sub ValidateAndGenerateFormattedSheet()
+    Dim wsSource As Worksheet, wsDest As Worksheet
+    Dim lastRow As Long, destRow As Long
+    Dim caseDict As Object, stepCount As Object
+    Dim i As Long, key As String
+    Dim headers As Variant
+    Dim userResponse As VbMsgBoxResult
+
+    Set wsSource = ThisWorkbook.Sheets("Sheet1") ' Change if your source sheet is named differently
+    Set caseDict = CreateObject("Scripting.Dictionary")
+    Set stepCount = CreateObject("Scripting.Dictionary")
+
+    ' Step 1: Validate input
+    lastRow = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+
+    For i = 2 To lastRow
+        key = Trim(wsSource.Cells(i, 1).Value) ' S.No
+        If key <> "" Then
+            If Not stepCount.exists(key) Then
+                stepCount.Add key, 1
+            Else
+                stepCount(key) = stepCount(key) + 1
+            End If
+
+            If Not caseDict.exists(key) Then
+                caseDict.Add key, i
+            End If
+        End If
+    Next i
+
+    ' Check if any test case has no steps
+    For Each key In caseDict.keys
+        If stepCount(key) = 0 Then
+            MsgBox "Test case with S.No '" & key & "' has no steps. Macro aborted.", vbCritical
+            Exit Sub
+        End If
+    Next key
+
+    ' Step 2: Create/Reset FormattedTestCases sheet
+    On Error Resume Next
+    Set wsDest = ThisWorkbook.Sheets("FormattedTestCases")
+    On Error GoTo 0
+
+    If Not wsDest Is Nothing Then
+        If Application.WorksheetFunction.CountA(wsDest.Cells) > 0 Then
+            userResponse = MsgBox("'FormattedTestCases' sheet already exists and contains data." & vbCrLf & _
+                                  "Do you want to clear and recreate it?", vbYesNo + vbQuestion)
+            If userResponse = vbNo Then
+                MsgBox "Macro cancelled. No changes made.", vbInformation
+                Exit Sub
+            Else
+                wsDest.Cells.Clear
+            End If
+        End If
+    Else
+        Set wsDest = ThisWorkbook.Sheets.Add
+        wsDest.Name = "FormattedTestCases"
+    End If
+
+    headers = Array("Title", "Description", "Area Path", "Iteration Path", "State", "Reason", "Work Item Type", "Assigned To", "Steps")
+    For i = 0 To UBound(headers)
+        wsDest.Cells(1, i + 1).Value = headers(i)
+    Next i
+
+    ' Step 3: Copy test case info (excluding steps)
+    destRow = 2
+    For Each key In caseDict.keys
+        i = caseDict(key)
+        wsDest.Cells(destRow, 1).Value = wsSource.Cells(i, 2).Value ' Title
+        wsDest.Cells(destRow, 2).Value = wsSource.Cells(i, 3).Value ' Description
+        wsDest.Cells(destRow, 3).Value = wsSource.Cells(i, 7).Value ' Area Path
+        wsDest.Cells(destRow, 4).Value = wsSource.Cells(i, 8).Value ' Iteration Path
+        wsDest.Cells(destRow, 5).Value = wsSource.Cells(i, 9).Value ' State
+        wsDest.Cells(destRow, 6).Value = wsSource.Cells(i, 10).Value ' Reason
+        wsDest.Cells(destRow, 7).Value = wsSource.Cells(i, 11).Value ' Work Item Type
+        wsDest.Cells(destRow, 8).Value = wsSource.Cells(i, 12).Value ' Assigned To
+        ' Steps column will be filled in next step
+        destRow = destRow + 1
+    Next key
+
+    MsgBox "Validation passed and 'FormattedTestCases' sheet generated. Ready for Step 3 (Steps formatting).", vbInformation
+End Sub
