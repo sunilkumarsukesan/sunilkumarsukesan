@@ -161,5 +161,15 @@ Sub Step3_GenerateStepsXML()
         End If
     Next i
 
-    MsgBox "✅ Step 3 complete! All test cases now have their steps formatted correctly.", vbInformation
+' ✅ Step 4: Clean up and prepare for paste
+    ' Delete S.No (Column J = 10)
+    wsDest.Columns(10).Delete
+
+    ' Select and copy the final result table (excluding headers)
+    lastRowDest = wsDest.Cells(wsDest.Rows.Count, "A").End(xlUp).Row
+    wsDest.Range("A2", wsDest.Cells(lastRowDest, 9)).Copy
+
+    MsgBox "✅ Step 3 complete!" & vbCrLf & _
+           "Test cases are now ready to be pasted into the uploader template." & vbCrLf & _
+           "(The table has been copied to your clipboard.)", vbInformation
 End Sub
