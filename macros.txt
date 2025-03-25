@@ -91,65 +91,75 @@ End Function
 
 Sub Step3_GenerateStepsXML()
     Dim wsSource As Worksheet, wsDest As Worksheet
-    Dim lastRowSrc As Long, lastRowDest As Long
     Dim stepsDict As Object
-    Dim stepId As Integer
-    Dim i As Long, j As Long
+    Dim lastRowSrc As Long, lastRowDest As Long
+    Dim rowKey As String, stepsXML As String
+    Dim stepList As Collection, stepItem As Variant
+    Dim i As Long, currentRow As Long, stepId As Long
     Dim action As String, expected As String
-    Dim rowKey As String
-    Dim stepsXML As String
-    Dim stepList As Variant
-    Dim tempColl As Collection
-    Dim tempArr As Variant
 
     Set wsSource = ThisWorkbook.Sheets("Sheet1")
     Set wsDest = ThisWorkbook.Sheets("FormattedTestCases")
     Set stepsDict = CreateObject("Scripting.Dictionary")
 
-    ' Group all steps from Sheet1 by S.No
-    lastRowSrc = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
-    For i = 2 To lastRowSrc
-        rowKey = Trim(wsSource.Cells(i, 1).Value) ' S.No
-        action = Trim(wsSource.Cells(i, 5).Value) ' Step Description
-        expected = Trim(wsSource.Cells(i, 6).Value) ' Expected Result
+    lastRowSrc = wsSource.Cells(wsSource.Rows.Count, "E").End(xlUp).Row
 
-        If rowKey <> "" And action <> "" And expected <> "" Then
-            If Not stepsDict.exists(rowKey) Then
-                Set tempColl = New Collection
-                stepsDict.Add rowKey, tempColl
+    ' STEP 1: Build stepsDict from Sheet1 (grouped by S.No)
+    For i = 2 To lastRowSrc
+        If Trim(wsSource.Cells(i, 5).Value) <> "" Then ' If Step Description exists
+            currentRow = i
+            ' Go upwards to find S.No (Column A)
+            Do While Trim(wsSource.Cells(currentRow, 1).Value) = "" And currentRow > 1
+                currentRow = currentRow - 1
+            Loop
+            rowKey = Trim(wsSource.Cells(currentRow, 1).Value)
+
+            If rowKey <> "" Then
+                If Not stepsDict.exists(rowKey) Then
+                    Set stepList = New Collection
+                    stepsDict.Add rowKey, stepList
+                Else
+                    Set stepList = stepsDict(rowKey)
+                End If
+
+                action = Trim(wsSource.Cells(i, 5).Value)
+                expected = Trim(wsSource.Cells(i, 6).Value)
+
+                If action <> "" And expected <> "" Then
+                    stepList.Add Array(action, expected)
+                End If
             End If
-            ' Always add to the same collection object
-            stepsDict(rowKey).Add Array(action, expected)
         End If
     Next i
 
-    ' Now fill the Steps column in FormattedTestCases
+    ' STEP 2: Inject steps into FormattedTestCases
     lastRowDest = wsDest.Cells(wsDest.Rows.Count, "A").End(xlUp).Row
+
     For i = 2 To lastRowDest
-        rowKey = Trim(wsDest.Cells(i, 10).Value) ' S.No in Column J
+        rowKey = Trim(wsDest.Cells(i, 10).Value) ' S.No in column J
 
         If stepsDict.exists(rowKey) Then
-            Set tempColl = stepsDict(rowKey)
-            stepsXML = "<steps id=""0"" last=""" & tempColl.Count & """>" & vbCrLf
+            Set stepList = stepsDict(rowKey)
+            stepsXML = "<steps id=""0"" last=""" & stepList.Count & """>" & vbCrLf
             stepId = 1
 
-            For Each tempArr In tempColl
+            For Each stepItem In stepList
                 stepsXML = stepsXML & "  <step id=""" & stepId & """ type=""ValidateStep"">" & vbCrLf
                 stepsXML = stepsXML & "    <parameterizedString isformatted=""true"">" & _
-                            EscapeHTML("<DIV><P>" & tempArr(0) & "</P></DIV>") & "</parameterizedString>" & vbCrLf
+                    EscapeHTML("<DIV><P>" & stepItem(0) & "</P></DIV>") & "</parameterizedString>" & vbCrLf
                 stepsXML = stepsXML & "    <parameterizedString isformatted=""true"">" & _
-                            EscapeHTML("<DIV><P>" & tempArr(1) & "</P></DIV>") & "</parameterizedString>" & vbCrLf
+                    EscapeHTML("<DIV><P>" & stepItem(1) & "</P></DIV>") & "</parameterizedString>" & vbCrLf
                 stepsXML = stepsXML & "  </step>" & vbCrLf
                 stepId = stepId + 1
-            Next tempArr
+            Next stepItem
 
             stepsXML = stepsXML & "</steps>"
-            wsDest.Cells(i, 9).Value = stepsXML ' Insert into Steps column
+            wsDest.Cells(i, 9).Value = stepsXML
         Else
             MsgBox "No steps found for S.No: " & rowKey, vbCritical
             Exit Sub
         End If
     Next i
 
-    MsgBox "Step 3 complete: All steps formatted and inserted!", vbInformation
+    MsgBox "✅ Step 3 complete! All test cases now have their steps formatted correctly.", vbInformation
 End Sub
