@@ -80,3 +80,70 @@ Sub ValidateAndGenerateFormattedSheet()
 
     MsgBox "Validation passed and 'FormattedTestCases' sheet generated. Ready for Step 3 (Steps formatting).", vbInformation
 End Sub
+
+
+Function EscapeHTML(str As String) As String
+    str = Replace(str, "&", "&amp;")
+    str = Replace(str, "<", "&lt;")
+    str = Replace(str, ">", "&gt;")
+    EscapeHTML = str
+End Function
+
+Sub Step3_GenerateStepsXML()
+    Dim wsSource As Worksheet, wsDest As Worksheet
+    Dim lastRowSrc As Long, lastRowDest As Long
+    Dim currentTCID As String
+    Dim stepsXML As String
+    Dim stepId As Integer
+    Dim dictSteps As Object
+    Dim i As Long, j As Long
+
+    Set wsSource = ThisWorkbook.Sheets("Sheet1")
+    Set wsDest = ThisWorkbook.Sheets("FormattedTestCases")
+    Set dictSteps = CreateObject("Scripting.Dictionary")
+
+    ' Step 1: Group steps by S.No
+    lastRowSrc = wsSource.Cells(wsSource.Rows.Count, "A").End(xlUp).Row
+    For i = 2 To lastRowSrc
+        currentTCID = Trim(wsSource.Cells(i, 1).Value)
+        If currentTCID <> "" Then
+            If Not dictSteps.exists(currentTCID) Then
+                dictSteps.Add currentTCID, New Collection
+            End If
+            dictSteps(currentTCID).Add Array(wsSource.Cells(i, 5).Value, wsSource.Cells(i, 6).Value) ' Action + Expected
+        End If
+    Next i
+
+    ' Step 2: Populate Steps column in destination
+    lastRowDest = wsDest.Cells(wsDest.Rows.Count, "A").End(xlUp).Row
+    For i = 2 To lastRowDest
+        currentTCID = Trim(wsDest.Cells(i, 1).Offset(0, -1).Value) ' Fetch S.No from Sheet1 (assumed to be in col A of Sheet1)
+
+        If dictSteps.exists(currentTCID) Then
+            Dim stepList As Collection
+            Set stepList = dictSteps(currentTCID)
+            
+            stepsXML = "<steps id=""0"" last=""" & stepList.Count & """>" & vbCrLf
+            stepId = 1
+            For Each stepItem In stepList
+                stepsXML = stepsXML & "  <step id=""" & stepId & """ type=""ValidateStep"">" & vbCrLf
+                stepsXML = stepsXML & "    <parameterizedString isformatted=""true"">" & _
+                           EscapeHTML("<DIV><P>" & stepItem(0) & "</P></DIV>") & "</parameterizedString>" & vbCrLf
+                stepsXML = stepsXML & "    <parameterizedString isformatted=""true"">" & _
+                           EscapeHTML("<DIV><P>" & stepItem(1) & "</P></DIV>") & "</parameterizedString>" & vbCrLf
+                stepsXML = stepsXML & "  </step>" & vbCrLf
+                stepId = stepId + 1
+            Next
+            stepsXML = stepsXML & "</steps>"
+
+            ' Put final result in Steps column (col 9)
+            wsDest.Cells(i, 9).Value = stepsXML
+        End If
+    Next i
+
+    ' Optional: Auto-select the result table
+    wsDest.Activate
+    wsDest.Range("A1").CurrentRegion.Select
+
+    MsgBox "Step 3 complete: Steps formatted and ready to paste into uploader!", vbInformation
+End Sub
